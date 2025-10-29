@@ -1,5 +1,4 @@
 flask
 line-bot-sdk
-selenium
+instaloader
 pandas
-requests
