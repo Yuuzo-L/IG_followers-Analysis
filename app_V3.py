@@ -1,15 +1,10 @@
-# ig_line_bot_render.py
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
+import instaloader
 import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import datetime
 import os
 
@@ -21,37 +16,10 @@ line_bot_api = LineBotApi(ACCESS_TOKEN)
 handler = WebhookHandler(SECRET)
 
 # ---------------- Instagram 抓粉絲 ----------------
-def parse_followers(followers_str):
-    followers_str = followers_str.replace(',', '').strip()
-    if '萬' in followers_str:
-        return int(float(followers_str.replace('萬','')) * 10000)
-    elif 'K' in followers_str:
-        return int(float(followers_str.replace('K','')) * 1000)
-    elif 'M' in followers_str:
-        return int(float(followers_str.replace('M','')) * 1000000)
-    else:
-        return int(float(followers_str))
-
 def get_followers(username):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/141.0.0.0 Safari/537.36"
-    )
-
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.get(f"https://www.instagram.com/{username}/")
-    followers_element = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.XPATH, '//span[@title]'))
-    )
-    followers_count = followers_element.get_attribute("title")
-    driver.quit()
-    return parse_followers(followers_count)
+    L = instaloader.Instaloader()
+    profile = instaloader.Profile.from_username(L.context, username)
+    return profile.followers
 
 def save_date(username, followers):
     today = datetime.date.today()
@@ -90,26 +58,9 @@ def get_difference(username, today_followers):
 # ---------------- LINE Webhook ----------------
 app = Flask(__name__)
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    text = event.message.text.strip()
-    if text.lower() == "抓粉絲":
-        username = "the_firsttake"  # 可改成你要抓的帳號
-        try:
-            followers = get_followers(username)
-            save_date(username, followers)
-            diff_msg = get_difference(username, followers)
-            reply = f"帳號：{username}\n粉絲數：{followers}\n{diff_msg}"
-        except Exception as e:
-            reply = f"抓取失敗：{e}"
-
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-    else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請傳 '抓粉絲' 來查詢粉絲數。"))
-
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get('X-Line-Signature', '')
     body = request.get_data(as_text=True)
     try:
         handler.handle(body, signature)
@@ -117,7 +68,23 @@ def callback():
         abort(400)
     return 'OK'
 
-# ---------------- Render 部署設定 ----------------
+@handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
+    text = event.message.text.strip()
+    if text.lower() == "抓粉絲":
+        username = "the_firsttake"  # 目標 IG 帳號
+        try:
+            followers = get_followers(username)
+            save_date(username, followers)
+            diff_msg = get_difference(username, followers)
+            reply = f"帳號：{username}\n粉絲數：{followers}\n{diff_msg}"
+        except Exception as e:
+            reply = f"抓取失敗：{e}"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    else:
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請傳 '抓粉絲' 來查詢粉絲數。"))
+
+# ---------------- Render 部署 ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
