@@ -1,3 +1,4 @@
+# ig_line_bot_render.py
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -6,14 +7,15 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import datetime
+import os
 
 # ---------------- LINE 設定 ----------------
-ACCESS_TOKEN = "B799OHjuXJ9+mFFz53Jvlct37fZuOOv1eJq8yY4QZPOZ96GAAChnkrsJGPoGEF9gU4mjKXiZrMNl+FTegJYKH5hPctXrlVvjkbGkhUNDfj0q0DVf22B5or9azKw3DNpeERyJ7JhO5F/Wba9EnvW+GgdB04t89/1O/w1cDnyilFU="
-SECRET = "22a7b9ed4003a08778308b10e7d0047a"
+ACCESS_TOKEN = "你的 LINE Channel Access Token"
+SECRET = "你的 LINE Channel Secret"
 
 line_bot_api = LineBotApi(ACCESS_TOKEN)
 handler = WebhookHandler(SECRET)
@@ -41,6 +43,7 @@ def get_followers(username):
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/141.0.0.0 Safari/537.36"
     )
+
     driver = webdriver.Chrome(options=chrome_options)
     driver.get(f"https://www.instagram.com/{username}/")
     followers_element = WebDriverWait(driver, 10).until(
@@ -91,7 +94,7 @@ app = Flask(__name__)
 def handle_message(event):
     text = event.message.text.strip()
     if text.lower() == "抓粉絲":
-        username = "the_firsttake"  # 你想抓的 IG 帳號
+        username = "the_firsttake"  # 可改成你要抓的帳號
         try:
             followers = get_followers(username)
             save_date(username, followers)
@@ -114,5 +117,7 @@ def callback():
         abort(400)
     return 'OK'
 
+# ---------------- Render 部署設定 ----------------
 if __name__ == "__main__":
-    app.run(port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
