@@ -14,8 +14,8 @@ import datetime
 import os
 
 # ---------------- LINE 設定 ----------------
-ACCESS_TOKEN = "你的 LINE Channel Access Token"
-SECRET = "你的 LINE Channel Secret"
+ACCESS_TOKEN = "B799OHjuXJ9+mFFz53Jvlct37fZuOOv1eJq8yY4QZPOZ96GAAChnkrsJGPoGEF9gU4mjKXiZrMNl+FTegJYKH5hPctXrlVvjkbGkhUNDfj0q0DVf22B5or9azKw3DNpeERyJ7JhO5F/Wba9EnvW+GgdB04t89/1O/w1cDnyilFU="
+SECRET = "22a7b9ed4003a08778308b10e7d0047a"
 
 line_bot_api = LineBotApi(ACCESS_TOKEN)
 handler = WebhookHandler(SECRET)
