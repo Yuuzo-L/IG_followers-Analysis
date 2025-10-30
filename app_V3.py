@@ -1,26 +1,34 @@
-from linebot.v3 import Configuration
-from linebot.v3.messaging import MessagingApi, TextMessage
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhook import WebhookParser, WebhookHandler
+# app_V3.py
 from flask import Flask, request, abort
+import os
+import datetime
+import pandas as pd
 import instaloader
 from instaloader.exceptions import BadResponseException, ConnectionException, QueryReturnedNotFoundException
-import pandas as pd
-import datetime
-import os
-import time
-import random
+import time, random
+
+# LINE SDK v3
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, TextMessage
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhook import WebhookParser
+from linebot.v3.exceptions import InvalidSignatureError
 
 # ---------------- LINE 設定 ----------------
 ACCESS_TOKEN = os.environ.get("LINE_ACCESS_TOKEN", "B799OHjuXJ9+mFFz53Jvlct37fZuOOv1eJq8yY4QZPOZ96GAAChnkrsJGPoGEF9gU4mjKXiZrMNl+FTegJYKH5hPctXrlVvjkbGkhUNDfj0q0DVf22B5or9azKw3DNpeERyJ7JhO5F/Wba9EnvW+GgdB04t89/1O/w1cDnyilFU=")
 SECRET = os.environ.get("LINE_SECRET", "22a7b9ed4003a08778308b10e7d0047a")
 
+# 建立 Flask
 app = Flask(__name__)
-handler = WebhookHandler(SECRET)
 parser = WebhookParser(SECRET)
-config = Configuration(access_token=ACCESS_TOKEN)
-messaging_api = MessagingApi(config)
+
+# 列印 LINE SDK 版本 (不用 pip)
+import linebot
+try:
+    print("LINE SDK version:", linebot.__version__)
+except AttributeError:
+    import pkg_resources
+    version = pkg_resources.get_distribution("line-bot-sdk").version
+    print("LINE SDK version (via pkg_resources):", version)
 
 # ---------------- Instagram 設定 ----------------
 IG_LOGIN_USER = os.environ.get("oscarpersons@gmail.com")
@@ -72,18 +80,11 @@ def get_followers_with_retry(username, L=None, max_retries=5, base_backoff=5):
         try:
             profile = instaloader.Profile.from_username(L.context, username)
             return int(profile.followers)
-        except ConnectionException:
+        except (ConnectionException, BadResponseException) as e:
             attempt += 1
             time.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0))
-        except BadResponseException as e:
-            msg = str(e)
-            if "Please wait" in msg or "fail" in msg or "login_required" in msg:
-                attempt += 1
-                time.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(1.0, 3.0))
-            else:
-                raise
-        except QueryReturnedNotFoundException as e:
-            raise Exception(f"帳號不存在或無法存取：{username}") from e
+        except QueryReturnedNotFoundException:
+            raise Exception(f"帳號不存在或無法存取：{username}")
         except Exception:
             attempt += 1
             time.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0))
@@ -160,10 +161,13 @@ def handle_event(event):
         else:
             reply = "請傳『抓粉絲 帳號名稱』來查詢粉絲數。"
 
-        messaging_api.reply_message(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text=reply)]
-        )
+        # MessagingApi 回覆訊息
+        with ApiClient(Configuration(access_token=ACCESS_TOKEN)) as api_client:
+            messaging_api = MessagingApi(api_client)
+            messaging_api.reply_message(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply)]
+            )
 
 # ---------------- Render 部署 ----------------
 if __name__ == "__main__":
