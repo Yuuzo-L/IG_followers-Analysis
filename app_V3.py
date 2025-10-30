@@ -1,10 +1,9 @@
-from flask import Flask, request, abort
-from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import MessagingApi, TextMessage as LineTextMessage
+from linebot.v3 import Configuration
+from linebot.v3.messaging import MessagingApi, TextMessage
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhook import WebhookParser
-
+from linebot.v3.webhook import WebhookParser, WebhookHandler
+from flask import Flask, request, abort
 import instaloader
 from instaloader.exceptions import BadResponseException, ConnectionException, QueryReturnedNotFoundException
 import pandas as pd
@@ -20,15 +19,22 @@ SECRET = os.environ.get("LINE_SECRET", "22a7b9ed4003a08778308b10e7d0047a")
 app = Flask(__name__)
 handler = WebhookHandler(SECRET)
 parser = WebhookParser(SECRET)
+config = Configuration(access_token=ACCESS_TOKEN)
+messaging_api = MessagingApi(config)
 
 # ---------------- Instagram 設定 ----------------
 IG_LOGIN_USER = os.environ.get("oscarpersons@gmail.com")
 IG_LOGIN_PASSWORD = os.environ.get("rainpersons")
 
 def make_instaloader():
-    L = instaloader.Instaloader(dirname_pattern=".", download_pictures=False,
-                                download_video_thumbnails=False, download_videos=False,
-                                save_metadata=False, compress_json=False)
+    L = instaloader.Instaloader(
+        dirname_pattern=".",
+        download_pictures=False,
+        download_video_thumbnails=False,
+        download_videos=False,
+        save_metadata=False,
+        compress_json=False
+    )
     if IG_LOGIN_USER:
         try:
             L.load_session_from_file(IG_LOGIN_USER)
@@ -54,7 +60,6 @@ def cached_today_followers(username):
 
 # ---------------- Instagram 抓粉絲 ----------------
 def get_followers_with_retry(username, L=None, max_retries=5, base_backoff=5):
-    # 先快取
     cached = cached_today_followers(username)
     if cached is not None:
         return cached
@@ -67,24 +72,21 @@ def get_followers_with_retry(username, L=None, max_retries=5, base_backoff=5):
         try:
             profile = instaloader.Profile.from_username(L.context, username)
             return int(profile.followers)
-        except ConnectionException as e:
+        except ConnectionException:
             attempt += 1
-            sleep_time = base_backoff * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0)
-            time.sleep(sleep_time)
+            time.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0))
         except BadResponseException as e:
             msg = str(e)
             if "Please wait" in msg or "fail" in msg or "login_required" in msg:
                 attempt += 1
-                sleep_time = base_backoff * (2 ** (attempt - 1)) + random.uniform(1.0, 3.0)
-                time.sleep(sleep_time)
+                time.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(1.0, 3.0))
             else:
                 raise
         except QueryReturnedNotFoundException as e:
             raise Exception(f"帳號不存在或無法存取：{username}") from e
-        except Exception as e:
+        except Exception:
             attempt += 1
-            sleep_time = base_backoff * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0)
-            time.sleep(sleep_time)
+            time.sleep(base_backoff * (2 ** (attempt - 1)) + random.uniform(0.5, 2.0))
     raise Exception("已重試多次但仍無法取得 Instagram 資料，請稍後再試或檢查登入/網路/IP。")
 
 def get_followers(username):
@@ -158,10 +160,9 @@ def handle_event(event):
         else:
             reply = "請傳『抓粉絲 帳號名稱』來查詢粉絲數。"
 
-        messaging_api = MessagingApi(channel_access_token=ACCESS_TOKEN)
         messaging_api.reply_message(
             reply_token=event.reply_token,
-            messages=[LineTextMessage(text=reply)]
+            messages=[TextMessage(text=reply)]
         )
 
 # ---------------- Render 部署 ----------------
