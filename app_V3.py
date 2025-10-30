@@ -22,11 +22,9 @@ handler = WebhookHandler(SECRET)
 parser = WebhookParser(SECRET)
 
 # ---------------- Instagram 設定 ----------------
-IG_LOGIN_USER = os.environ.get("oscarpersons@gmail.com")      # IG 登入帳號
-IG_LOGIN_PASSWORD = os.environ.get("rainpersons")  # IG 密碼
-SESSION_FILENAME = f"{IG_LOGIN_USER}.session" if IG_LOGIN_USER else "insta.session"
+IG_LOGIN_USER = os.environ.get("oscarpersons@gmail.com")
+IG_LOGIN_PASSWORD = os.environ.get("rainpersons")
 
-# 建立 Instaloader instance
 def make_instaloader():
     L = instaloader.Instaloader(dirname_pattern=".", download_pictures=False,
                                 download_video_thumbnails=False, download_videos=False,
@@ -34,20 +32,12 @@ def make_instaloader():
     if IG_LOGIN_USER:
         try:
             L.load_session_from_file(IG_LOGIN_USER)
-            print("已載入 IG session 檔。")
         except FileNotFoundError:
             if IG_LOGIN_PASSWORD:
-                try:
-                    L.login(IG_LOGIN_USER, IG_LOGIN_PASSWORD)
-                    L.save_session_to_file()
-                    print("已登入並儲存 session。")
-                except Exception as e:
-                    print("登入失敗：", e)
-            else:
-                print("未找到 session 檔且未設定 IG_LOGIN_PASSWORD，會用未登入模式。")
+                L.login(IG_LOGIN_USER, IG_LOGIN_PASSWORD)
+                L.save_session_to_file()
     return L
 
-# 建立全域 L instance
 L_global = make_instaloader()
 
 # ---------------- CSV 快取 ----------------
@@ -64,6 +54,7 @@ def cached_today_followers(username):
 
 # ---------------- Instagram 抓粉絲 ----------------
 def get_followers_with_retry(username, L=None, max_retries=5, base_backoff=5):
+    # 先快取
     cached = cached_today_followers(username)
     if cached is not None:
         return cached
@@ -155,10 +146,7 @@ def handle_event(event):
         parts = text.split(maxsplit=1)
 
         if parts[0].lower() == "抓粉絲":
-            if len(parts) > 1:
-                username = parts[1].strip()
-            else:
-                username = "the_firsttake"  # 預設帳號
+            username = parts[1].strip() if len(parts) > 1 else "the_firsttake"
 
             try:
                 followers = get_followers(username)
